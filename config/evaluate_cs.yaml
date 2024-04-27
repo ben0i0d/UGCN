@@ -1,0 +1,51 @@
+batch_size: 32
+# feeder
+train_feeder: feeder.ntu_feeder.Feeder_single
+train_feeder_args:
+  data_path: ./data/xsub/train_position.npy
+  label_path: ./data/xsub/train_label.pkl
+  shear_amplitude: -1
+  temperal_padding_ratio: -1
+# split: 0.01
+  mmap: True
+
+test_feeder: feeder.ntu_feeder.Feeder_single
+test_feeder_args:
+  data_path: ./data/xsub/val_position.npy
+  label_path: ./data/xsub/val_label.pkl
+  shear_amplitude: -1
+  temperal_padding_ratio: -1
+  mmap: True
+
+# model
+model: net.st_gcn.Model
+model_args:
+  in_channels: 3
+  hidden_channels: 16
+  hidden_dim: 512
+  num_class: 60
+  dropout: 0.5
+  
+  graph_args:
+    
+     layout: 'ntu-rgb+d' 
+     strategy: 'spatial'
+  edge_importance_weighting: True
+
+## optim
+#nesterov: False
+#weight_decay: 0.0
+#base_lr: 3.
+#optimizer: SGD
+#step: [80]
+#
+## training
+#device: [0]
+#batch_size: 128
+#test_batch_size: 128
+#num_epoch: 100
+#view: 'all'
+#
+## log
+#save_interval: -1
+#eval_interval: 5
