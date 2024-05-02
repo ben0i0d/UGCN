@@ -23,14 +23,18 @@ def gen_64f(dataset, set):
         for j in range(300):
             if index !=0:
                 break
-            if np.all(data[i][0][j]==0):
-                index = j
+            if np.all(source[i][0][j]==0):
+                index = j + 1
         if index <= 64:
             data[i] = source[i, :, :64, :, :]
         else:
-            width = (index + 1) // 64
-            for k in range(64):
-                data[i,:,k,:,:] = np.divide(data[i,:,k*width:k+width,:,:].sum(axis=1),width)
+            sep = 64 - index%64
+            width = index // 64
+            for k in range(sep):
+                data[i,:,k,:,:] = np.divide(source[i,:,k*width:(k+1)*width,:,:].sum(axis=1),width)
+            width = width + 1
+            for k in range(sep,64):
+                data[i,:,k,:,:] = np.divide(source[i,:,k*width-sep:(k+1)*width-sep,:,:].sum(axis=1),width)
         index =0      
                 
 processes = []
