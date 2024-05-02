@@ -2,8 +2,8 @@ batch_size: 32
 # feeder
 train_feeder: feeder.ntu_feeder.Feeder_dual
 train_feeder_args:
-  data_path: data/xsub/train_joint.npy
-  label_path: data/xsub/train_label.pkl
+  data_path: data_gen/data/f64/xsub/train_joint.npy
+  label_path: data_gen/data/f64/xsub/train_label.pkl
   temperal_padding_ratio: 5
   shear_amplitude: 0.5
   l_ratio: [0.1, 1]

@@ -1,60 +1,31 @@
-# Copyright (c) Facebook, Inc. and its affiliates.
-# All rights reserved.
-#
-# This source code is licensed under the license found in the
-# LICENSE file in the root directory of this source tree.
-import os
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
-
 from pathlib import Path
 import argparse
 import json
-import os
 import random
-import signal
 import sys
 import time
-import urllib
 import yaml
-import pickle
-
-from torch import nn, optim
-from torchvision import models, datasets, transforms
 import torch
-import torchvision
+from torch import nn, optim
 from torchlight.io import DictAction
 from torchlight.io import import_class
 from torchlight.io import str2bool
 import numpy as np
 from tensorboardX import SummaryWriter
-from feeder import tools
 
 parser = argparse.ArgumentParser(description='Evaluate resnet50 features on ImageNet')
 
-parser.add_argument('--pretrained', type=Path, default='./runs/pretrain/1/checkpoint.pth',metavar='FILE',
-                    help='path to pretrained model')
-parser.add_argument('--weights', default='freeze', type=str,
-                    choices=('finetune', 'freeze'),
-                    help='finetune or freeze resnet weights')
-parser.add_argument('--train-percent', default=100, type=int,
-                    choices=(100, 10, 1),
-                    help='size of traing set in percent')
-parser.add_argument('--workers', default=8, type=int, metavar='N',
-                    help='number of data loader workers')
-parser.add_argument('--epochs', default=100, type=int, metavar='N',
-                    help='number of total epochs to run')
-parser.add_argument('--batch-size', default=128, type=int, metavar='N',
-                    help='mini-batch size')
-parser.add_argument('--lr-backbone', default=0, type=float, metavar='LR',
-                    help='backbone base learning rate')
-parser.add_argument('--lr-classifier', default=0.3, type=float, metavar='LR',
-                    help='classifier base learning rate')
-parser.add_argument('--weight-decay', default=1e-6, type=float, metavar='W',
-                    help='weight decay')
-parser.add_argument('--print-freq', default=1000, type=int, metavar='N',
-                    help='print frequency')
-parser.add_argument('--checkpoint-dir', default='./runs/evaluate/1', type=Path,
-                    metavar='DIR', help='path to checkpoint directory')
+parser.add_argument('--pretrained', type=Path, default='./runs/pretrain/1/checkpoint.pth',metavar='FILE',help='path to pretrained model')
+parser.add_argument('--weights', default='freeze', type=str,choices=('finetune', 'freeze'),help='finetune or freeze resnet weights')
+parser.add_argument('--train-percent', default=100, type=int,choices=(100, 10, 1),help='size of traing set in percent')
+parser.add_argument('--workers', default=8, type=int, metavar='N',help='number of data loader workers')
+parser.add_argument('--epochs', default=100, type=int, metavar='N',help='number of total epochs to run')
+parser.add_argument('--batch-size', default=128, type=int, metavar='N',help='mini-batch size')
+parser.add_argument('--lr-backbone', default=0, type=float, metavar='LR',help='backbone base learning rate')
+parser.add_argument('--lr-classifier', default=0.3, type=float, metavar='LR',help='classifier base learning rate')
+parser.add_argument('--weight-decay', default=1e-6, type=float, metavar='W',help='weight decay')
+parser.add_argument('--print-freq', default=1000, type=int, metavar='N',help='print frequency')
+parser.add_argument('--checkpoint-dir', default='./runs/evaluate/1', type=Path,metavar='DIR', help='path to checkpoint directory')
 
 parser.add_argument('-c', '--config', default='./config/evaluate_cs.yaml', help='path to the configuration file')
 parser.add_argument('--stream', default='joint')
@@ -315,15 +286,6 @@ def main_worker(gpu, args):
         torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
     np.save(args.checkpoint_dir / "train.npy",train_acc)
     np.save(args.checkpoint_dir / "test.npy",test_acc)
-
-def handle_sigusr1(signum, frame):
-    os.system(f'scontrol requeue {os.getenv("SLURM_JOB_ID")}')
-    exit()
-
-
-def handle_sigterm(signum, frame):
-    pass
-
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""

@@ -4,15 +4,12 @@ feeder/__pycache__
 graph/__pycache__
 net/__pycache__
 net/utils/__pycache__
+optim/__pycache__
 
 data_gen/data
 data/xsub
 data/xview
 data_gen/data/nturgb+d_skeletons
 
-runs/evaluate/1
-runs/evaluate/train
-runs/evaluate/val
-
-runs/pretrain/1
-runs/pretrain/2
+runs/evaluate
+runs/pretrain

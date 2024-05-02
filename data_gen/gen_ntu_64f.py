@@ -15,7 +15,7 @@ datasets = {
 
 def gen_64f(dataset, set):
     print(dataset, set)
-    source = open_memmap('./data/{}/{}_joint.npy'.format(dataset, set),mode='r')
+    source = open_memmap('./data/f300/{}/{}_joint.npy'.format(dataset, set),mode='r')
     data = open_memmap('./data/f64/{}/{}_joint.npy'.format(dataset, set),mode='w+',shape=(source.shape[0],3,64,25,2),dtype='float32')
     
     for i in tqdm(range(source.shape[0])):

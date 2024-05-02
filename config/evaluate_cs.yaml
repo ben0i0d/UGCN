@@ -2,8 +2,8 @@ batch_size: 32
 # feeder
 train_feeder: feeder.ntu_feeder.Feeder_single
 train_feeder_args:
-  data_path: ./data/xsub/train_position.npy
-  label_path: ./data/xsub/train_label.pkl
+  data_path: data_gen/data/f64/xsub/train_joint.npy
+  label_path: data_gen/data/f64/xsub/train_label.pkl
   shear_amplitude: -1
   temperal_padding_ratio: -1
 # split: 0.01
@@ -11,8 +11,8 @@ train_feeder_args:
 
 test_feeder: feeder.ntu_feeder.Feeder_single
 test_feeder_args:
-  data_path: ./data/xsub/val_position.npy
-  label_path: ./data/xsub/val_label.pkl
+  data_path: data_gen/data/f64/xsub/train_joint.npy
+  label_path: data_gen/data/f64/xsub/train_label.pkl
   shear_amplitude: -1
   temperal_padding_ratio: -1
   mmap: True
