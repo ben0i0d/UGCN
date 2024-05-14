@@ -1,31 +1,63 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+
 from pathlib import Path
 import argparse
 import json
+import os
 import random
+import signal
 import sys
 import time
+import urllib
 import yaml
-import torch
+import pickle
+
 from torch import nn, optim
-from torchlight.io import DictAction
-from torchlight.io import import_class
-from torchlight.io import str2bool
+from torchvision import models, datasets, transforms
+import torch
+import torchvision
+from torchlight import DictAction
+from torchlight import import_class
+from torchlight import str2bool
 import numpy as np
 from tensorboardX import SummaryWriter
-
+from feeder import tools
+import sklearn
+from sklearn.manifold import TSNE
+import matplotlib
+import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser(description='Evaluate resnet50 features on ImageNet')
 
-parser.add_argument('--pretrained', type=Path, default='./runs/pretrain/1/checkpoint.pth',metavar='FILE',help='path to pretrained model')
-parser.add_argument('--weights', default='freeze', type=str,choices=('finetune', 'freeze'),help='finetune or freeze resnet weights')
-parser.add_argument('--train-percent', default=100, type=int,choices=(100, 10, 1),help='size of traing set in percent')
-parser.add_argument('--workers', default=8, type=int, metavar='N',help='number of data loader workers')
-parser.add_argument('--epochs', default=100, type=int, metavar='N',help='number of total epochs to run')
-parser.add_argument('--batch-size', default=128, type=int, metavar='N',help='mini-batch size')
-parser.add_argument('--lr-backbone', default=0, type=float, metavar='LR',help='backbone base learning rate')
-parser.add_argument('--lr-classifier', default=0.3, type=float, metavar='LR',help='classifier base learning rate')
-parser.add_argument('--weight-decay', default=1e-6, type=float, metavar='W',help='weight decay')
-parser.add_argument('--print-freq', default=1000, type=int, metavar='N',help='print frequency')
-parser.add_argument('--checkpoint-dir', default='./runs/evaluate/1', type=Path,metavar='DIR', help='path to checkpoint directory')
+parser.add_argument('--pretrained', type=Path, default='./xsub60/1/best.pth',metavar='FILE',
+                    help='path to pretrained model')
+parser.add_argument('--weights', default='freeze', type=str,
+                    choices=('finetune', 'freeze'),
+                    help='finetune or freeze resnet weights')
+parser.add_argument('--train-percent', default=100, type=int,
+                    choices=(100, 10, 1),
+                    help='size of traing set in percent')
+parser.add_argument('--workers', default=8, type=int, metavar='N',
+                    help='number of data loader workers')
+parser.add_argument('--epochs', default=100, type=int, metavar='N',
+                    help='number of total epochs to run')
+parser.add_argument('--batch-size', default=128, type=int, metavar='N',
+                    help='mini-batch size')
+parser.add_argument('--lr-backbone', default=0, type=float, metavar='LR',
+                    help='backbone base learning rate')
+parser.add_argument('--lr-classifier', default=0.3, type=float, metavar='LR',
+                    help='classifier base learning rate')
+parser.add_argument('--weight-decay', default=1e-6, type=float, metavar='W',
+                    help='weight decay')
+parser.add_argument('--print-freq', default=1000, type=int, metavar='N',
+                    help='print frequency')
+parser.add_argument('--checkpoint-dir', default='./xsub60/random2/t', type=Path,
+                    metavar='DIR', help='path to checkpoint directory')
 
 parser.add_argument('-c', '--config', default='./config/evaluate_cs.yaml', help='path to the configuration file')
 parser.add_argument('--stream', default='joint')
@@ -73,12 +105,12 @@ def main():
     else:
         args.dev = "cpu"
 
-    main_worker(args.dev, args)
+    main_worker(0, args)
 
 
 def main_worker(gpu, args):
-    train_writer = SummaryWriter('./runs/evaluate/train')
-    val_writer = SummaryWriter('./runs/evaluate/val')
+    train_writer = SummaryWriter('./runs/train')
+    val_writer = SummaryWriter('./runs/val')
 
     args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
     stats_file = open(args.checkpoint_dir / 'stats.txt', 'a', buffering=1)
@@ -94,7 +126,7 @@ def main_worker(gpu, args):
 
     state_dict = torch.load(args.pretrained, map_location='cpu')
     missing_keys, unexpected_keys = model.load_state_dict(state_dict, strict=False)
-   # assert missing_keys == ['fc.weight', 'fc.bias'] # and unexpected_keys == []
+#    assert missing_keys == ['fc.weight', 'fc.bias'] # and unexpected_keys == []
     model.fc.weight.data.normal_(mean=0.0, std=0.01)
     model.fc.bias.data.zero_()
     if args.weights == 'freeze':
@@ -117,7 +149,8 @@ def main_worker(gpu, args):
 
     # automatically resume from checkpoint if it exists
     if (args.checkpoint_dir / 'checkpoint.pth').is_file():
-        ckpt = torch.load(args.checkpoint_dir / 'checkpoint.pth',map_location='cpu')
+        ckpt = torch.load(args.checkpoint_dir / 'checkpoint.pth',
+                          map_location='cpu')
         start_epoch = ckpt['epoch']
         best_acc = ckpt['best_acc']
         model.load_state_dict(ckpt['model'])
@@ -153,8 +186,7 @@ def main_worker(gpu, args):
 
     start_time = time.time()
     step_val = 0
-    train_acc=np.zeros(100)
-    test_acc=np.zeros(100)
+    bestout=np.zeros((16487,60))
     for epoch in range(start_epoch, args.epochs):
         # train
         if args.weights == 'finetune':
@@ -173,7 +205,7 @@ def main_worker(gpu, args):
         # for step, (images, target) in enumerate(train_loader, start=epoch * len(train_loader)):
         for batch_idx, (data, label, index) in enumerate(train_loader):
             n_batch = len(train_loader)
-
+            
             if args.stream == 'joint':
                 pass
             elif args.stream == 'motion':
@@ -191,9 +223,9 @@ def main_worker(gpu, args):
                 data = bone
             else:
                 raise ValueError
-
+            #label=label.squeeze(1) 
             output = model(data.float().to(args.dev, non_blocking=True))
-            loss = criterion(output, label.cuda(gpu, non_blocking=True))
+            loss = criterion(output, label.cuda())
             acc1, acc5 = accuracy(output, label.cuda(gpu, non_blocking=True), topk=(1, 5))
             top1_train.update(acc1[0].item(), data.size(0))
             top5_train.update(acc5[0].item(), data.size(0))
@@ -216,7 +248,7 @@ def main_worker(gpu, args):
                 print(json.dumps(stats), file=stats_file)
 
         train_writer.add_scalar('Acc@1', top1_train.avg, epoch)
-        train_acc[epoch]=top1_train.avg
+
         # evaluate
         model.eval()
         predicted_labels = torch.zeros(len(test_loader.dataset)).long()
@@ -244,6 +276,7 @@ def main_worker(gpu, args):
                 else:
                     raise ValueError
                 output = model(data.float().to(args.dev, non_blocking=True))
+                #target=target.squeeze(1)
                 score_flag.append(output.data.cpu().numpy())
                 _, predicted = torch.max(output.data, 1)
                 predicted_labels[index] = predicted.cpu()
@@ -257,7 +290,8 @@ def main_worker(gpu, args):
             val_writer.add_scalar('Acc@1', top1.avg, epoch)
             score = np.concatenate(score_flag)
             
-        # if top1.avg > best_acc.top1:
+            if top1.avg > best_acc.top1:
+                bestout=score
         #     predicted_labels = np.asarray(predicted_labels)
         #     np.save('./pku1/1/lincls/predicted_labels.npy',
         #             predicted_labels)
@@ -265,13 +299,13 @@ def main_worker(gpu, args):
         #
         #     with open('./pku1/1/lincls/' + 'best_acc.pkl', 'wb') as f:
         #         pickle.dump(score_dict, f)
-        test_acc[epoch]=top1.avg
+
         best_acc.top1 = max(best_acc.top1, top1.avg)
         best_acc.top5 = max(best_acc.top5, top5.avg)
         stats = dict(epoch=epoch, acc1=top1.avg, acc5=top5.avg, best_acc1=best_acc.top1, best_acc5=best_acc.top5)
         print(json.dumps(stats))
         print(json.dumps(stats), file=stats_file)
-
+        np.save("sfeature.npy",bestout)
         # # sanity check
         # if args.weights == 'freeze':
         #     reference_state_dict = torch.load(args.pretrained, map_location='cpu')
@@ -284,8 +318,16 @@ def main_worker(gpu, args):
                 epoch=epoch + 1, best_acc=best_acc, model=model.state_dict(),
                 optimizer=optimizer.state_dict(), scheduler=scheduler.state_dict())
         torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
-    np.save(args.checkpoint_dir / "train.npy",train_acc)
-    np.save(args.checkpoint_dir / "test.npy",test_acc)
+
+
+def handle_sigusr1(signum, frame):
+    os.system(f'scontrol requeue {os.getenv("SLURM_JOB_ID")}')
+    exit()
+
+
+def handle_sigterm(signum, frame):
+    pass
+
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""

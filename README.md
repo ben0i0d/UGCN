@@ -4,15 +4,27 @@
 
 ## 数据处理
 
-1. 数据预处理：通过`data_gen/gen_joint.py`下生成`joint`模态300帧的视频，
-2. 数据模态预处理：基于上一步得到`bone`基础模态，与`motion`模态数据生成
-3. 数据切片化处理：通过`data_gen/gen_ntu_50f.py`对原始数据处理生成50帧的视频,或者使用`data_gen/gen_ntu_50f.py`生成64帧视频
+1. Get skeleton of each performer:`python get_raw_skes_data.py`
+2. Remove the bad skeleton:`python get_raw_denoised_data.py`
+3. Transform the skeleton to the center of the first frame：`python seq_transformation.py`
 
 *使用300帧的原因是，存在的最大帧数为299*
 
 *平均帧数为84.36*
 
 ![alt text](.resources/image.png)
+
+#### Directory Structure
+```
+- data/
+  - ntu/
+  - ntu120/
+  - nturgbd_raw/
+    - nturgb+d_skeletons/     # from `nturgbd_skeletons_s001_to_s017.zip`
+      ...
+    - nturgb+d_skeletons120/  # from `nturgbd_skeletons_s018_to_s032.zip`
+      ...
+```
 
 ## 模型训练
 

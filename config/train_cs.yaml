@@ -1,12 +1,14 @@
-batch_size: 32
+batch_size: 256
 # feeder
 train_feeder: feeder.ntu_feeder.Feeder_dual
 train_feeder_args:
-  data_path: data_gen/data/f64/xsub/train_joint.npy
-  label_path: data_gen/data/f64/xsub/train_label.pkl
+  data_path: /root/data/bak/master/data/chuankun/ADL/data/NTU60/xsub/x_train.npy
+  label_path: /root/data/bak/master/data/chuankun/ADL/data/NTU60/xsub/train_label.npy
   temperal_padding_ratio: 5
-  shear_amplitude: 0.5
+  shear_amplitude: 1
   l_ratio: [0.1, 1]
+  window_size: 64
+  p_interval: [0.1,1]
   mmap: True
 
 # model
@@ -14,17 +16,14 @@ model: net.st_gcn.Model
 model_args:
 #  feature_dim: 128
   in_channels: 3
-  hidden_channels: 16
-  hidden_dim: 512
+  hidden_channels: 64 # 1/4 x channels of standard stgcn
+  hidden_dim: 256
   num_class: 60
   dropout: 0.5
- 
   graph_args:
-    
-    layout: 'ntu-rgb+d' 
+    layout: 'ntu-rgb+d'
     strategy: 'spatial'
   edge_importance_weighting: True
-
 
 moving_average_decay: 0.99
 projection_size: 1024

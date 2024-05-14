@@ -6,10 +6,11 @@ net/__pycache__
 net/utils/__pycache__
 optim/__pycache__
 
-data_gen/data
-data/xsub
-data/xview
-data_gen/data/nturgb+d_skeletons
+data_gen/ntu/raw_data
+data_gen/ntu/denoised_data
+data_gen/ntu/data
+
+data_gen/nturgbd_raw/
 
 runs/evaluate
 runs/pretrain
