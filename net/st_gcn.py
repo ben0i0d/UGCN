@@ -7,7 +7,7 @@ from net.utils.tgcn import ConvTemporalGraphical
 from net.utils.graph import Graph
 from net.att_drop import  CA_Drop
 from net.agcn import unit_gcn
-
+from net.ctrgcn import TCN_GCN_unit
 class Model(nn.Module):
     r"""Spatial temporal graph convolutional networks."""
 
@@ -28,17 +28,22 @@ class Model(nn.Module):
         self.data_bn = nn.BatchNorm1d(in_channels * 25)
         kwargs0 = {k: v for k, v in kwargs.items() if k != 'dropout'}
         
-        self.l1=st_gcn(in_channels, hidden_channels, kernel_size, 1,A, residual=False, **kwargs0)
-        self.l2=st_gcn(hidden_channels, hidden_channels, kernel_size, 1,A, **kwargs)
-        self.l3=st_gcn(hidden_channels, hidden_channels, kernel_size, 1,A, **kwargs)
-        self.l4=st_gcn(hidden_channels, hidden_channels, kernel_size, 1,A, **kwargs)
-        self.l5=st_gcn(hidden_channels, hidden_channels * 2, kernel_size, 2,A, **kwargs)
-        self.l6=st_gcn(hidden_channels * 2, hidden_channels * 2, kernel_size, 1,A, **kwargs)
-        self.l7=st_gcn(hidden_channels * 2, hidden_channels * 2, kernel_size, 1,A, **kwargs)
-        self.l8=st_gcn(hidden_channels * 2, hidden_channels * 4, kernel_size, 2,A, **kwargs)
-        self.l9=st_gcn(hidden_channels * 4, hidden_channels * 4, kernel_size, 1,A, **kwargs)
-        self.l10=st_gcn(hidden_channels * 4, hidden_dim, kernel_size, 1,A, **kwargs)
-        self.att=unit_gcn(hidden_dim,hidden_dim,A)
+        #self.l1=st_gcn(in_channels, hidden_channels, kernel_size, 1,A, residual=False, **kwargs0)
+        #self.l2=st_gcn(hidden_channels, hidden_channels, kernel_size, 1,A, **kwargs)
+        #self.l3=st_gcn(hidden_channels, hidden_channels, kernel_size, 1,A, **kwargs)
+        #self.l4=st_gcn(hidden_channels, hidden_channels, kernel_size, 1,A, **kwargs)
+        #self.l5=st_gcn(hidden_channels, hidden_channels * 2, kernel_size, 2,A, **kwargs)
+        #self.l6=st_gcn(hidden_channels * 2, hidden_channels * 2, kernel_size, 1,A, **kwargs)
+        #self.l7=st_gcn(hidden_channels * 2, hidden_channels * 2, kernel_size, 1,A, **kwargs)
+        #self.l8=st_gcn(hidden_channels * 2, hidden_channels * 4, kernel_size, 2,A, **kwargs)
+        #self.l9=st_gcn(hidden_channels * 4, hidden_channels * 4, kernel_size, 1,A, **kwargs)
+        #self.l10=st_gcn(hidden_channels * 4, hidden_dim, kernel_size, 1,A, **kwargs)
+        self.l1 = TCN_GCN_unit(in_channels, hidden_channels, A, residual=False, adaptive=True)
+        self.l2 = TCN_GCN_unit(hidden_channels, hidden_channels, A,stride=2, adaptive=True)
+        self.l3 = TCN_GCN_unit(hidden_channels, hidden_channels, A, adaptive=True)
+        self.l4 = TCN_GCN_unit(hidden_channels, 2*hidden_channels, A,stride=2, adaptive=True)
+        self.l5 = TCN_GCN_unit(2*hidden_channels, hidden_dim, A,adaptive=True)
+        #self.att=unit_gcn(hidden_dim,hidden_dim,A)
         self.fc = nn.Linear(hidden_dim, num_class)
         self.pro = projection_MLP(hidden_dim)
 
@@ -67,26 +72,26 @@ class Model(nn.Module):
         x = self.l3(x)
         x = self.l4(x)
         x = self.l5(x)
-        x = self.l6(x)
-        x = self.l7(x)
-        x = self.l8(x)
-        x = self.l9(x)
-        x = self.l10(x)
+        #x = self.l6(x)
+        #x = self.l7(x)
+        #x = self.l8(x)
+       # x = self.l9(x)
+       # x = self.l10(x)
         # forward
         
         if return_projection:
           
-            y=self.att(x)
+           # y=self.att(x)
             # global pooling
             x = F.avg_pool2d(x, x.size()[2:])
             x = x.view(N, M, -1).mean(dim=1)
-            y = F.avg_pool2d(y, y.size()[2:])
-            y = y.view(N, M, -1).mean(dim=1)
+           # y = F.avg_pool2d(y, y.size()[2:])
+           # y = y.view(N, M, -1).mean(dim=1)
             # prediction
             x = self.pro(x)
           
-            y = self.pro(y)
-            return x,y
+          #  y = self.pro(y)
+            return x
         else:
             # global pooling
             x = F.avg_pool2d(x, x.size()[2:])
@@ -138,8 +143,7 @@ class st_gcn(nn.Module):
         assert kernel_size[0] % 2 == 1
         padding = ((kernel_size[0] - 1) // 2, 0)
 
-        self.gcn = ConvTemporalGraphical(in_channels, out_channels,
-                                         kernel_size[1],A)
+        self.gcn = ConvTemporalGraphical(in_channels, out_channels, 3,A)
 
         self.tcn = nn.Sequential(
             nn.BatchNorm2d(out_channels),
@@ -149,7 +153,7 @@ class st_gcn(nn.Module):
                 out_channels,
                 (kernel_size[0], 1),
                 (stride, 1),
-                padding,
+               padding,
             ),
             nn.BatchNorm2d(out_channels),
             nn.Dropout(dropout, inplace=True),
