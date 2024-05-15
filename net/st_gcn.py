@@ -5,9 +5,9 @@ import numpy as np
 
 from net.utils.tgcn import ConvTemporalGraphical
 from net.utils.graph import Graph
-from net.att_drop import  CA_Drop
-from net.agcn import unit_gcn
+
 from net.ctrgcn import TCN_GCN_unit
+
 class Model(nn.Module):
     r"""Spatial temporal graph convolutional networks."""
 
@@ -40,9 +40,9 @@ class Model(nn.Module):
         #self.l10=st_gcn(hidden_channels * 4, hidden_dim, kernel_size, 1,A, **kwargs)
         self.l1 = TCN_GCN_unit(in_channels, hidden_channels, A, residual=False, adaptive=True)
         self.l2 = TCN_GCN_unit(hidden_channels, hidden_channels, A,stride=2, adaptive=True)
-        self.l3 = TCN_GCN_unit(hidden_channels, hidden_channels, A, adaptive=True)
-        self.l4 = TCN_GCN_unit(hidden_channels, 2*hidden_channels, A,stride=2, adaptive=True)
-        self.l5 = TCN_GCN_unit(2*hidden_channels, hidden_dim, A,adaptive=True)
+        #self.l3 = TCN_GCN_unit(hidden_channels, hidden_channels, A, adaptive=True)
+        self.l3 = TCN_GCN_unit(hidden_channels, 2*hidden_channels, A,stride=2, adaptive=True)
+        self.l4 = TCN_GCN_unit(2*hidden_channels, hidden_dim, A,adaptive=True)
         #self.att=unit_gcn(hidden_dim,hidden_dim,A)
         self.fc = nn.Linear(hidden_dim, num_class)
         self.pro = projection_MLP(hidden_dim)
@@ -71,7 +71,6 @@ class Model(nn.Module):
         x = self.l2(x)
         x = self.l3(x)
         x = self.l4(x)
-        x = self.l5(x)
         #x = self.l6(x)
         #x = self.l7(x)
         #x = self.l8(x)

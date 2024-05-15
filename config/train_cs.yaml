@@ -2,14 +2,14 @@ batch_size: 256
 # feeder
 train_feeder: feeder.ntu_feeder.Feeder_dual
 train_feeder_args:
-  data_path: /root/data/bak/master/data/chuankun/ADL/data/NTU60/xsub/x_train.npy
-  label_path: /root/data/bak/master/data/chuankun/ADL/data/NTU60/xsub/train_label.npy
+  data_path: data_gen/ntu/NTU60_CS.npz
   temperal_padding_ratio: 5
   shear_amplitude: 1
   l_ratio: [0.1, 1]
   window_size: 64
   p_interval: [0.1,1]
-  mmap: True
+  split: 'train'
+  stream: 'joint'
 
 # model
 model: net.st_gcn.Model

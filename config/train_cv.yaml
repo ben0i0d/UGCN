@@ -1,20 +1,22 @@
-batch_size: 128
+batch_size: 256
 # feeder
 train_feeder: feeder.ntu_feeder.Feeder_dual
 train_feeder_args:
-  data_path: /home/ubuntu/NTU/NTU60_frame50_new/xview/train_position.npy
-  label_path: /home/ubuntu/NTU/NTU60_frame50_new/xview/train_label.pkl
-  temperal_padding_ratio: 6
-  shear_amplitude: 0.5
+  data_path: data_gen/ntu/NTU60_CV.npz
+  temperal_padding_ratio: 5
+  shear_amplitude: 1
   l_ratio: [0.1, 1]
-  mmap: True
+  window_size: 64
+  p_interval: [0.1,1]
+  split: 'train'
+  stream: 'joint'
 
 # model
 model: net.st_gcn.Model
 model_args:
 #  feature_dim: 128
   in_channels: 3
-  hidden_channels: 16 # 1/4 x channels of standard stgcn
+  hidden_channels: 64 # 1/4 x channels of standard stgcn
   hidden_dim: 256
   num_class: 60
   dropout: 0.5
@@ -24,7 +26,7 @@ model_args:
   edge_importance_weighting: True
 
 moving_average_decay: 0.99
-projection_size: 128
+projection_size: 1024
 projection_hidden_size: 512
 
 

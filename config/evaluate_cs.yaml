@@ -2,26 +2,23 @@ batch_size: 128
 # feeder
 train_feeder: feeder.ntu_feeder.Feeder_single
 train_feeder_args:
-  data_path: /root/data/bak/master/data/chuankun/CTR-GCN-main/data/ntu/NTU60_CS.npz
-  label_path: /root/data/bak/master/data/chuankun/ADL/data/NTU60_frame50/xsub/train_label.npy
+  data_path: data_gen/ntu/NTU60_CS.npz
   split: train
   shear_amplitude: -1
   temperal_padding_ratio: -1
   p_interval: [0.95]
   window_size: 64
-# split: 0.01
-  mmap: True
+  stream: joint
 
 test_feeder: feeder.ntu_feeder.Feeder_single
 test_feeder_args:
-  data_path: /root/data/bak/master/data/chuankun/CTR-GCN-main/data/ntu/NTU60_CS.npz
-  label_path: /root/data/bak/master/data/chuankun/ADL/data/NTU60_frame50/xsub/val_label.npy
+  data_path: data_gen/ntu/NTU60_CS.npz
   split: test
   shear_amplitude: -1
   temperal_padding_ratio: -1
   window_size: 64
   p_interval: [0.95]
-  mmap: True
+  stream: joint
 
 # model
 model: net.st_gcn.Model

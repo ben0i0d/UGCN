@@ -168,7 +168,7 @@ def split_dataset(skes_joints, label, performer, camera, evaluation, save_path):
     test_x = skes_joints[test_indices]
     test_y = one_hot_vector(test_labels)
 
-    save_name = 'data/NTU60_%s.npz' % evaluation
+    save_name = 'NTU60_%s.npz' % evaluation
     np.savez(save_name, x_train=train_x, y_train=train_y, x_test=test_x, y_test=test_y)
 
     # Save data into a .h5 file

@@ -124,7 +124,7 @@ class BYOL(nn.Module):
     #Train
     def forward(
         self,
-        x1, x2,x3,
+        x1, x2,
         return_embedding = False,
         return_projection = True
     ):
@@ -135,22 +135,22 @@ class BYOL(nn.Module):
 
         f,h=self.encoder,self.predictor
        
-        z1,_= f(x1,return_projection = True)
+        z1= f(x1,return_projection = True)
 
-        z2,_ = f(x2,return_projection = True)
-        z3,y = f(x3,return_projection = True)
+        z2 = f(x2,return_projection = True)
+        #z3 = f(x3,return_projection = True)
        # A2=self.graph(x1)
      
         p1 = h(z1)
         p2 = h(z2)
        
-        y=  h(y)
+        #y=  h(z3)
         with torch.no_grad():
             target_encoder = self.get_target_encoder() if self.use_momentum else self.encoder
-            x11,_= target_encoder(x1,return_projection = True)
+            x11= target_encoder(x1,return_projection = True)
         
-            x22,_= target_encoder(x2,return_projection = True)
-           
+            x22= target_encoder(x2,return_projection = True)
+          
 
             x11.detach_()
             x22.detach_()
@@ -164,7 +164,7 @@ class BYOL(nn.Module):
         loss1=loss_fn(p1,x22.detach())
         loss2=loss_fn(p2,x11.detach())
 
-        loss3=loss_fn(y,p1)
+        #loss3=loss_fn(y,p1)
         #loss4=loss_fn(p3,x01.detach())
         #loss3=loss_fn(p3,p1)
         
@@ -181,7 +181,7 @@ class BYOL(nn.Module):
 #        loss_1 = - torch.sum(F.softmax(logitsk.detach() / self.tt, dim=1) * F.log_softmax(logitsq / self.ot, dim=1), dim=1).mean()
        
  #       self._dequeue_and_enqueue(F.normalize(x22, dim=-1))
-        loss=loss1+loss2+loss3
+        loss=loss1+loss2
         return loss.mean()
 
 class EMA():

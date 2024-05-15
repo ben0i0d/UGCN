@@ -29,7 +29,7 @@
 ## 模型训练
 
 注意：
-1. `main_train.py`更名为`pretrain.py`，对于`baseline`基准，后缀为`_bl`
+1. `main_train.py`更名为`pretrain.py`
 2. 默认启用了`checkpoint`机制,注意`checkpoint`只支持单阶段，例如预训练得到的权重只服务于预训练阶段，如果要将权重用到测试阶段，则必须使用`stgcn.pth`这样的权重
 3. torchlight不再需要`pip install`，改写了代码使用文件直接链接
 4. 默认将生成文件统一放入`runs`，包括测试生成的`.npy`文件等，当前我们仅考虑NTU60数据集，因此没有细化目录结构
