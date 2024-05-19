@@ -14,29 +14,26 @@ import numpy as np
 from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser(description='Evaluate resnet50 features on ImageNet')
-
-parser.add_argument('--pretrained', type=Path, default='./runs/pretrain/best.pth',metavar='FILE',help='path to pretrained model')
-parser.add_argument('--weights', default='freeze', type=str,choices=('finetune', 'freeze'),help='finetune or freeze resnet weights')
-parser.add_argument('--train-percent', default=100, type=int,choices=(100, 10, 1),help='size of traing set in percent')
-parser.add_argument('--workers', default=8, type=int, metavar='N',help='number of data loader workers')
-parser.add_argument('--epochs', default=100, type=int, metavar='N',help='number of total epochs to run')
-parser.add_argument('--batch-size', default=128, type=int, metavar='N',help='mini-batch size')
-parser.add_argument('--lr-backbone', default=0, type=float, metavar='LR',help='backbone base learning rate')
-parser.add_argument('--lr-classifier', default=0.3, type=float, metavar='LR',help='classifier base learning rate')
-parser.add_argument('--weight-decay', default=1e-6, type=float, metavar='W',help='weight decay')
-parser.add_argument('--print-freq', default=1000, type=int, metavar='N',help='print frequency')
-parser.add_argument('--checkpoint-dir', default='./runs/evaluate/1', type=Path,metavar='DIR', help='path to checkpoint directory')
-parser.add_argument('-c', '--config', default='./config/evaluate_cs.yaml', help='path to the configuration file')
-# feeder
-parser.add_argument('--train_feeder', default='feeder.feeder', help='train data loader will be used')
-parser.add_argument('--test_feeder', default='feeder.feeder', help='test data loader will be used')
-parser.add_argument('--train_feeder_args', action=DictAction, default=dict(), help='the arguments of data loader for training')
-parser.add_argument('--test_feeder_args', action=DictAction, default=dict(), help='the arguments of data loader for test')
-# model
-parser.add_argument('--model', default=None, help='the model will be used')
-parser.add_argument('--model_args', action=DictAction, default=dict(), help='the arguments of model')
-
 parser.add_argument('--use_gpu', type=str2bool, default=True, help='use GPUs or not')
+parser.add_argument('--pretrained', type=Path, default='./runs/pretrain/cv/stgcn_470.pth',metavar='FILE',help='path to pretrained model')
+parser.add_argument('--checkpoint-dir', default='./runs/evaluate/cv1', type=Path,metavar='DIR', help='path to checkpoint directory')
+parser.add_argument('-c', '--config', default='./config/evaluate_cv.yaml', help='path to the configuration file')
+parser.add_argument('--weights', default='freeze', type=str,choices=('finetune', 'freeze'),help='finetune or freeze resnet weights')
+parser.add_argument('--workers',type=int, metavar='N',help='number of data loader workers')
+parser.add_argument('--epochs',type=int, metavar='N',help='number of total epochs to run')
+parser.add_argument('--batch-size',type=int, metavar='N',help='mini-batch size')
+parser.add_argument('--lr_backbone', type=float, metavar='LR',help='backbone base learning rate')
+parser.add_argument('--lr_classifier', type=float, metavar='LR',help='classifier base learning rate')
+parser.add_argument('--weight_decay', type=float, metavar='W',help='weight decay')
+parser.add_argument('--print-freq', default=1000, type=int, metavar='N',help='print frequency')
+# feeder
+parser.add_argument('--train_feeder', help='train data loader will be used')
+parser.add_argument('--test_feeder', help='test data loader will be used')
+parser.add_argument('--train_feeder_args', action=DictAction, help='the arguments of data loader for training')
+parser.add_argument('--test_feeder_args', action=DictAction, help='the arguments of data loader for test')
+# model
+parser.add_argument('--model', help='the model will be used')
+parser.add_argument('--model_args', action=DictAction, help='the arguments of model')
 
 def init_seed(seed=1):
     torch.cuda.manual_seed_all(seed)
@@ -52,9 +49,6 @@ def main_worker(gpu, args):
     val_writer = SummaryWriter('./runs/evaluate/val')
 
     args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    stats_file = open(args.checkpoint_dir / 'stats.txt', 'a', buffering=1)
-    print(' '.join(sys.argv))
-    print(' '.join(sys.argv), file=stats_file)
 
     torch.cuda.set_device(gpu)
     torch.backends.cudnn.benchmark = True
@@ -132,13 +126,14 @@ def main_worker(gpu, args):
             model.eval()
         else:
             assert False
-        # train_sampler.set_epoch(epoch)
+
         train_loader = data_loader['train']
         test_loader = data_loader['test']
 
         top1_train = AverageMeter('Acc@1_train')
         top5_train = AverageMeter('Acc@5_train')
 
+        print("Epoch:[{}/{}] Train".format(epoch+1,args.epochs))
         for batch_idx, (data, label, index) in enumerate(train_loader):
             data = data.float().to(args.dev, non_blocking=True)
             label = label.long().to(args.dev, non_blocking=True)
@@ -164,8 +159,6 @@ def main_worker(gpu, args):
                 stats = dict(epoch=epoch, step=step, lr_backbone=lr_backbone,
                             lr_classifier=lr_classifier, loss=loss.item(), acc1=top1_train.avg, acc5=top5_train.avg,
                             time=int(time.time() - start_time))
-                print(json.dumps(stats))
-                print(json.dumps(stats), file=stats_file)
 
         train_writer.add_scalar('Acc@1', top1_train.avg, epoch)
 

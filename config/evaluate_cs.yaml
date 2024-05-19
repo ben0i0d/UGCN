@@ -21,7 +21,7 @@ test_feeder_args:
   stream: joint
 
 # model
-model: net.st_gcn.Model
+model: net.gcn.Model
 model_args:
   # feature_dim: 128
   # queue_size: 32768

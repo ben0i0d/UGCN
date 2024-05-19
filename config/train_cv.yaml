@@ -1,4 +1,3 @@
-batch_size: 256
 # feeder
 train_feeder: feeder.ntu_feeder.Feeder_dual
 train_feeder_args:
@@ -12,7 +11,7 @@ train_feeder_args:
   stream: 'joint'
 
 # model
-model: net.st_gcn.Model
+model: net.gcn.Model
 model_args:
 #  feature_dim: 128
   in_channels: 3
@@ -25,32 +24,20 @@ model_args:
     strategy: 'spatial'
   edge_importance_weighting: True
 
+# byol
 moving_average_decay: 0.99
 projection_size: 1024
 projection_hidden_size: 512
+K: 512
+tt: 0.03
+ot: 0.1
+drop_percent: 0.2
 
-
+# training
+batch_size: 256
+epochs: 600
+workers: 8
 
 ## optim
-#nesterov: False
-#weight_decay: 1e-4
-#base_lr: 0.1
-#optimizer: SGD
-#step: [250]
-#
-## training
-#device: [0]
-#batch_size: 128
-#test_batch_size: 128
-#num_epoch: 300
-#start_epoch: 0
-#
-## cross training
-#topk: 1
-#view: 'all'
-#cross_epoch: 150
-#context: True
-#
-## log
-#save_interval: 5
-#eval_interval: -1
+learning-rate: 2
+weight_decay: 1e-6

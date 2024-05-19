@@ -8,8 +8,8 @@ optim/__pycache__
 
 data_gen/ntu/raw_data
 data_gen/ntu/denoised_data
-data_gen/ntu/data
-
+data_gen/ntu/NTU60_CS.npz
+data_gen/ntu/NTU60_CV.npz
 data_gen/nturgbd_raw/
 
 runs/evaluate
