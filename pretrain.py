@@ -1,15 +1,12 @@
 from pathlib import Path
 import argparse
-import json
 import math
 import random
 import sys
-import time
 import yaml
 import torch
 from torchlight.io import DictAction
 from torchlight.io import import_class
-from torchlight.io import str2bool
 
 from tqdm import tqdm
 
@@ -20,7 +17,7 @@ from net.byol import BYOL
 from optim.lars import LARS
 
 parser = argparse.ArgumentParser(description='BYOL Training')
-parser.add_argument('--use_gpu', type=str2bool, default=True, help='use GPUs or not')
+parser.add_argument('--dev', type=str, help='use dev')
 parser.add_argument('--workers', type=int, metavar='N',help='number of data loader workers')
 parser.add_argument('--epochs', type=int, metavar='N',help='number of total epochs to run')
 parser.add_argument('--batch-size', type=int, metavar='N',help='mini-batch size')
@@ -28,7 +25,7 @@ parser.add_argument('--learning_rate', type=float, metavar='LR',help='base learn
 parser.add_argument('--weight-decay', type=float, metavar='W',help='weight decay')
 parser.add_argument('--print-freq', type=int, metavar='N',help='print frequency')
 # If you do not start training from the last training end state, change the following directory
-parser.add_argument('--checkpoint-dir', default='runs/pretrain/1/', type=Path,metavar='DIR', help='path to checkpoint directory')
+parser.add_argument('--checkpoint-dir', default='runs/pretrain/cs/', type=Path,metavar='DIR', help='path to checkpoint directory')
 parser.add_argument('-c', '--config', default='config/train_cs.yaml', help='path to the configuration file')
 # feeder
 parser.add_argument('--train_feeder', help='train data loader will be used')
@@ -117,7 +114,7 @@ def main_worker(gpu, args):
     for epoch in range(start_epoch, args.epochs):
         loss0=0
         print("Epoch:[{}/{}]".format(epoch+1,args.epochs))
-        for batch_idx, ([data1, data2], label) in enumerate(tqdm((data_loader))):
+        for batch_idx, ([data1, data2], label) in enumerate(tqdm(data_loader)):
             data1 = data1.float().to(args.dev, non_blocking=True)
             data2 = data2.float().to(args.dev, non_blocking=True)
             
@@ -163,9 +160,5 @@ if __name__ == '__main__':
         parser.set_defaults(**default_arg)
 
     args = parser.parse_args()
-    if args.use_gpu:
-        args.dev = "cuda:0"
-    else:
-        args.dev = "cpu"
-        
+
     main_worker(args.dev, args)

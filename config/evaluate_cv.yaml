@@ -41,17 +41,3 @@ workers: 8
 lr_backbone: 0
 lr_classifier: 0.3
 weight_decay: 1e-6
-#base_lr: 3.
-#optimizer: SGD
-#step: [80]
-#
-## training
-#device: [0]
-#batch_size: 128
-#test_batch_size: 128
-#num_epoch: 100
-#view: 'all'
-#
-## log
-#save_interval: -1
-#eval_interval: 5

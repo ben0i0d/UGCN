@@ -23,11 +23,6 @@ test_feeder_args:
 # model
 model: net.gcn.Model
 model_args:
-  # feature_dim: 128
-  # queue_size: 32768
-  # momentum: 0.999
-  # Temperature: 0.07
-  # mlp: True
   in_channels: 3
   hidden_channels: 64
   hidden_dim: 256
@@ -38,20 +33,12 @@ model_args:
     strategy: 'spatial'
   edge_importance_weighting: True
 
+# training
+batch_size: 128
+epochs: 100
+workers: 8
+
 ## optim
-#nesterov: False
-#weight_decay: 0.0
-#base_lr: 3.
-#optimizer: SGD
-#step: [80]
-#
-## training
-#device: [0]
-#batch_size: 128
-#test_batch_size: 128
-#num_epoch: 100
-#view: 'all'
-#
-## log
-#save_interval: -1
-#eval_interval: 5
+lr_backbone: 0
+lr_classifier: 0.3
+weight_decay: 1e-6
