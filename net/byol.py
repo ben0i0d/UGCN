@@ -38,9 +38,8 @@ class BYOL(nn.Module):
     def __init__(self, args):
         super().__init__()
         Model = import_class(args.model)
-        self.dev = args.dev
 
-        self.encoder = Model(**args.model_args).to(args.dev)
+        self.encoder = Model(**args.model_args)
         
         self.use_momentum = True
         self.target_encoder = copy.deepcopy(self.encoder)
@@ -56,8 +55,8 @@ class BYOL(nn.Module):
         self.register_buffer("queue", torch.randn(args.projection_hidden_size, self.K))
         self.queue = F.normalize(self.queue, dim=0)
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
-        self.criterion = nn.CrossEntropyLoss().cuda()
-        self.to(args.dev)
+        self.criterion = nn.CrossEntropyLoss()
+
 
     def get_target_encoder(self):
         if self.target_encoder==None:

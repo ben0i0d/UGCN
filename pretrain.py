@@ -1,23 +1,24 @@
-from pathlib import Path
-import argparse
-import math
-import random
 import sys
 import yaml
-import torch
+import math
+import random
+import argparse
+import numpy as np
+from tqdm import tqdm
+from pathlib import Path
+
 from torchlight.io import DictAction
 from torchlight.io import import_class
-
-from tqdm import tqdm
-
-import numpy as np
 from tensorboardX import SummaryWriter
+
+import torch
+from torch.utils.data.distributed import DistributedSampler
 
 from net.byol import BYOL
 from optim.lars import LARS
 
 parser = argparse.ArgumentParser(description='BYOL Training')
-parser.add_argument('--dev', type=str, help='use dev')
+parser.add_argument("--local-rank", type=int, default=-1)
 parser.add_argument('--workers', type=int, metavar='N',help='number of data loader workers')
 parser.add_argument('--epochs', type=int, metavar='N',help='number of total epochs to run')
 parser.add_argument('--batch-size', type=int, metavar='N',help='mini-batch size')
@@ -46,15 +47,11 @@ parser.add_argument('--K', type=float)
 parser.add_argument('--tt', type=float)
 parser.add_argument('--ot', type=float)
 
-def init_seed(seed=1):
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.manual_seed(seed)
-    np.random.seed(seed)
+def set_seed(seed = 42):
     random.seed(seed)
-    # torch.backends.cudnn.enabled = False
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 def adjust_learning_rate(args, optimizer, loader_len, step):
     max_steps = args.epochs * loader_len
@@ -75,74 +72,9 @@ def adjust_learning_rate(args, optimizer, loader_len, step):
 def exclude_bias_and_norm(p):
     return p.ndim == 1
 
-def main_worker(gpu, args):
-    train_writer = SummaryWriter('./runs/pretrain')
-
-    args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    stats_file = open(args.checkpoint_dir / 'stats.txt', 'a', buffering=1)
-    print(' '.join(sys.argv))
-    print(' '.join(sys.argv), file=stats_file)
-
-    torch.cuda.set_device(gpu)
-    torch.backends.cudnn.benchmark = True
-
-    model = BYOL(args).cuda(gpu)
-    optimizer = LARS(model.parameters(), lr=0, weight_decay=args.weight_decay,weight_decay_filter=exclude_bias_and_norm,lars_adaptation_filter=exclude_bias_and_norm)
-    
-    # automatically resume from checkpoint if it exists
-    if (args.checkpoint_dir / 'checkpoint.pth').is_file():
-        ckpt = torch.load(args.checkpoint_dir / 'checkpoint.pth', map_location='cpu')
-        model.load_state_dict(ckpt['model'], strict=False)
-        optimizer.load_state_dict(ckpt['optimizer'])
-        start_epoch = ckpt['epoch']
-    else:
-        start_epoch = 0
-    
-    train_feeder = import_class(args.train_feeder)
-    data_loader= torch.utils.data.DataLoader(
-        dataset=train_feeder(**args.train_feeder_args),
-        batch_size=args.batch_size,
-        shuffle=True,
-        pin_memory=True,  # set True when memory is abundant
-        num_workers=args.workers,
-        drop_last=True,
-        worker_init_fn=init_seed)
-    loader_len = len(data_loader)
-
-    loss_min=200
-
-    for epoch in range(start_epoch, args.epochs):
-        loss0=0
-        print("Epoch:[{}/{}]".format(epoch+1,args.epochs))
-        for batch_idx, ([data1, data2], label) in enumerate(tqdm(data_loader)):
-            data1 = data1.float().to(args.dev, non_blocking=True)
-            data2 = data2.float().to(args.dev, non_blocking=True)
-            
-            label = label.long().to(args.dev, non_blocking=True)
-
-            step = epoch * loader_len + batch_idx
-            lr = adjust_learning_rate(args, optimizer, loader_len, step)
-
-            loss = model.forward(data1, data2, return_embedding=False, return_projection=True)
-            loss0=loss+loss0
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            train_writer.add_scalar('loss_step', loss.data.item(), step)
-            lr = optimizer.param_groups[0]['lr']
-            train_writer.add_scalar('lr', lr, step)          
-        print("LR:{} Loss:{}".format(lr,loss.item()))
-        state = dict(epoch=epoch + 1, model=model.state_dict(),optimizer=optimizer.state_dict())
-        torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
-        if loss0<loss_min and epoch>100:
-           loss_min=loss0
-           torch.save(model.encoder.state_dict(),args.checkpoint_dir / 'best.pth')
-        if (epoch+1) % 10 == 0:
-            torch.save(model.encoder.state_dict(),args.checkpoint_dir / 'stgcn_{}.pth'.format(epoch + 1))
-    torch.save(model.encoder.state_dict(),args.checkpoint_dir / 'stgcn.pth')
-
 if __name__ == '__main__':
+    set_seed()
+    
     p = parser.parse_args()
 
     if p.config is not None:
@@ -160,5 +92,69 @@ if __name__ == '__main__':
         parser.set_defaults(**default_arg)
 
     args = parser.parse_args()
+    if args.local_rank == 0:
+        train_writer = SummaryWriter('./runs/pretrain')
+        args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-    main_worker(args.dev, args)
+    # 每个进程根据自己的local_rank设置应该使用的GPU
+    torch.cuda.set_device(args.local_rank)
+    device = torch.device('cuda', args.local_rank)
+    # 初始化分布式环境，主要用来帮助进程间通信
+    torch.distributed.init_process_group(backend='nccl')
+    model = BYOL(args).to(device)
+
+    optimizer = LARS(model.parameters(), lr=0, weight_decay=args.weight_decay,weight_decay_filter=exclude_bias_and_norm,lars_adaptation_filter=exclude_bias_and_norm)
+    
+    # automatically resume from checkpoint if it exists
+    if (args.checkpoint_dir / 'checkpoint.pth').is_file():
+        ckpt = torch.load(args.checkpoint_dir / 'checkpoint.pth', map_location='cpu')
+        model.load_state_dict(ckpt['model'], strict=False)
+        optimizer.load_state_dict(ckpt['optimizer'])
+        start_epoch = ckpt['epoch']
+    else:
+        start_epoch = 0
+    
+    train_feeder = import_class(args.train_feeder)
+    train_dataset = train_feeder(**args.train_feeder_args)
+
+    train_sampler = DistributedSampler(train_dataset)
+    train_loader = torch.utils.data.DataLoader(train_dataset, sampler=train_sampler, batch_size=args.batch_size)
+    loader_len = len(train_loader)
+
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True)
+
+    loss_min=200
+
+    for epoch in range(start_epoch, args.epochs):
+        loss0=0
+        print("Epoch:[{}/{}]".format(epoch+1,args.epochs))
+        for batch_idx, ([data1, data2], label) in enumerate(tqdm(train_loader)):
+            data1 = data1.float().to(device, non_blocking=True)
+            data2 = data2.float().to(device, non_blocking=True)
+            
+            label = label.long().to(device, non_blocking=True)
+
+            step = epoch * loader_len + batch_idx
+            lr = adjust_learning_rate(args, optimizer, loader_len, step)
+
+            loss = model.forward(data1, data2, return_embedding=False, return_projection=True)
+            loss0=loss+loss0
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            if args.local_rank == 0:
+                train_writer.add_scalar('loss_step', loss.data.item(), step)
+            lr = optimizer.param_groups[0]['lr']
+            if args.local_rank == 0:
+                train_writer.add_scalar('lr', lr, step)          
+        print("Device{}: LR:{} Loss:{}".format(args.local_rank,lr,loss.item()))
+        
+        if args.local_rank == 0:
+            state = dict(epoch=epoch + 1, model=model.module.cpu().state_dict(),optimizer=optimizer.state_dict())
+            torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
+            if (epoch+1) % 10 == 0:
+                torch.save(model.module.encoder.cpu().state_dict(),args.checkpoint_dir / 'ugcn_{}.pth'.format(epoch + 1))
+            if loss0<loss_min and epoch>100:
+                loss_min=loss0
+                torch.save(model.module.encoder.cpu().state_dict(),args.checkpoint_dir / 'best.pth')
+    torch.save(model.module.encoder.cpu().state_dict(),args.checkpoint_dir / 'ugcn.pth')
