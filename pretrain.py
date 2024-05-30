@@ -73,8 +73,6 @@ def exclude_bias_and_norm(p):
     return p.ndim == 1
 
 if __name__ == '__main__':
-    set_seed()
-    
     p = parser.parse_args()
 
     if p.config is not None:
@@ -92,15 +90,18 @@ if __name__ == '__main__':
         parser.set_defaults(**default_arg)
 
     args = parser.parse_args()
-    if args.local_rank == 0:
-        train_writer = SummaryWriter('./runs/pretrain')
-        args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
-
+    
+    set_seed()
     # 每个进程根据自己的local_rank设置应该使用的GPU
     torch.cuda.set_device(args.local_rank)
     device = torch.device('cuda', args.local_rank)
     # 初始化分布式环境，主要用来帮助进程间通信
     torch.distributed.init_process_group(backend='nccl')
+    
+    if args.local_rank == 0:
+        train_writer = SummaryWriter('./runs/pretrain')
+        args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
     model = BYOL(args).to(device)
 
     optimizer = LARS(model.parameters(), lr=0, weight_decay=args.weight_decay,weight_decay_filter=exclude_bias_and_norm,lars_adaptation_filter=exclude_bias_and_norm)
@@ -142,19 +143,17 @@ if __name__ == '__main__':
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            if args.local_rank == 0:
-                train_writer.add_scalar('loss_step', loss.data.item(), step)
             lr = optimizer.param_groups[0]['lr']
             if args.local_rank == 0:
-                train_writer.add_scalar('lr', lr, step)          
+                train_writer.add_scalar('loss_step', loss.data.item(), step)
+                train_writer.add_scalar('lr', lr, step)     
         print("Device{}: LR:{} Loss:{}".format(args.local_rank,lr,loss.item()))
         
-        if args.local_rank == 0:
-            state = dict(epoch=epoch + 1, model=model.module.cpu().state_dict(),optimizer=optimizer.state_dict())
-            torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
-            if (epoch+1) % 10 == 0:
-                torch.save(model.module.encoder.cpu().state_dict(),args.checkpoint_dir / 'ugcn_{}.pth'.format(epoch + 1))
-            if loss0<loss_min and epoch>100:
-                loss_min=loss0
-                torch.save(model.module.encoder.cpu().state_dict(),args.checkpoint_dir / 'best.pth')
-    torch.save(model.module.encoder.cpu().state_dict(),args.checkpoint_dir / 'ugcn.pth')
+        state = dict(epoch=epoch + 1, model=model.module.state_dict(),optimizer=optimizer.state_dict())
+        torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
+        if (epoch+1) % 10 == 0:
+            torch.save(model.module.encoder.state_dict(),args.checkpoint_dir / 'ugcn_{}.pth'.format(epoch + 1))
+        if loss0<loss_min and epoch>100:
+            loss_min=loss0
+            torch.save(model.module.encoder.state_dict(),args.checkpoint_dir / 'best.pth')
+    torch.save(model.module.encoder.state_dict(),args.checkpoint_dir / 'ugcn.pth')
