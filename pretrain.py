@@ -25,7 +25,7 @@ parser.add_argument('--epochs', type=int, metavar='N',help='number of total epoc
 parser.add_argument('--batch-size', type=int, metavar='N',help='mini-batch size')
 parser.add_argument('--learning_rate', type=float, metavar='LR',help='base learning rate')
 parser.add_argument('--weight-decay', type=float, metavar='W',help='weight decay')
-parser.add_argument('--print-freq', type=int, metavar='N',help='print frequency')
+parser.add_argument('--print_freq', type=int, metavar='N',help='print frequency')
 # If you do not start training from the last training end state, change the following directory
 parser.add_argument('--checkpoint-dir', default='runs/pretrain/cs/', type=Path,metavar='DIR', help='path to checkpoint directory')
 parser.add_argument('-c', '--config', default='config/train_cs.yaml', help='path to the configuration file')
@@ -118,7 +118,7 @@ if __name__ == '__main__':
 
     train_sampler = DistributedSampler(train_dataset)
     train_loader = torch.utils.data.DataLoader(train_dataset, sampler=train_sampler, batch_size=args.batch_size)
-    loader_len = len(train_loader)
+    
 
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True)
 
@@ -128,6 +128,8 @@ if __name__ == '__main__':
         loss0=0
         print("Epoch:[{}/{}]".format(epoch+1,args.epochs))
         for batch_idx, ([data1, data2], label) in enumerate(tqdm(train_loader)):
+            loader_len = len(train_loader)
+
             data1 = data1.float().to(device, non_blocking=True)
             data2 = data2.float().to(device, non_blocking=True)
             
@@ -144,7 +146,9 @@ if __name__ == '__main__':
             lr = optimizer.param_groups[0]['lr']
             if args.local_rank == 0:
                 train_writer.add_scalar('loss_step', loss.data.item(), step)
-                train_writer.add_scalar('lr', lr, step)     
+                train_writer.add_scalar('lr', lr, step)
+            if args.local_rank == 0 and args.print_freq > 0 and batch_idx % args.print_freq == 0:
+                print('Train Epoch: {} [{}/{}] Loss: {:.6f}'.format(epoch+1, batch_idx, loader_len, loss.item()))
         print("Device{}: LR:{} Loss:{}".format(args.local_rank,lr,loss.item()))
         
         state = dict(epoch=epoch + 1, model=model.module.state_dict(),optimizer=optimizer.state_dict())

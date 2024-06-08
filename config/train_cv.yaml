@@ -37,6 +37,7 @@ drop_percent: 0.2
 batch_size: 272
 epochs: 800
 workers: 8
+print_freq: 200
 
 ## optim
 learning_rate: 2
