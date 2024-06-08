@@ -1,6 +1,9 @@
 import torch
 from torch import optim
 
+def exclude_bias_and_norm(p):
+    return p.ndim == 1
+
 class LARS(optim.Optimizer):
     def __init__(self, params, lr, weight_decay=0, momentum=0.9, eta=0.001,
                  weight_decay_filter=None, lars_adaptation_filter=None):

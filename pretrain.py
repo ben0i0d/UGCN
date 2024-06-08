@@ -16,6 +16,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 from net.byol import BYOL
 from optim.lars import LARS
+from optim.lars import exclude_bias_and_norm
 
 parser = argparse.ArgumentParser(description='BYOL Training')
 parser.add_argument("--local-rank", type=int, default=-1)
@@ -68,9 +69,6 @@ def adjust_learning_rate(args, optimizer, loader_len, step):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     return lr
-
-def exclude_bias_and_norm(p):
-    return p.ndim == 1
 
 if __name__ == '__main__':
     p = parser.parse_args()
