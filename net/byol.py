@@ -44,7 +44,6 @@ class BYOL(nn.Module):
         self.use_momentum = True
         self.target_encoder = copy.deepcopy(self.encoder)
         self.target_ema_updater = EMA(beta=args.moving_average_decay)
-        self.target_encoder1 = copy.deepcopy(self.encoder)
         self.predictor = prediction_MLP(args.projection_hidden_size, args.projection_size, args.projection_hidden_size)
 
         self.tt = args.tt
@@ -55,7 +54,6 @@ class BYOL(nn.Module):
         self.register_buffer("queue", torch.randn(args.projection_hidden_size, self.K))
         self.queue = F.normalize(self.queue, dim=0)
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
-        self.criterion = nn.CrossEntropyLoss()
 
 
     def get_target_encoder(self):
@@ -74,59 +72,24 @@ class BYOL(nn.Module):
         assert self.target_encoder is not None, 'target encoder has not been created yet'
         update_moving_average(self.target_ema_updater, self.target_encoder, self.encoder)
 
-    def get_target_encoder1(self):
-        if self.target_encoder1==None:
-            self.target_encoder1 = copy.deepcopy(self.encoder)
-        self.update_moving_average1()
-        set_requires_grad(self.target_encoder1, False)
-        return self.target_encoder1
-
-    def reset_moving_average1(self):
-        del self.target_encoder1
-        self.target_encoder1 = None
-
-    def update_moving_average1(self):
-        assert self.use_momentum, 'you do not need to update the moving average, since you have turned off momentum for the target encoder'
-        assert self.target_encoder1 is not None, 'target encoder has not been created yet'
-        update_moving_average(self.target_ema_updater, self.target_encoder1, self.encoder)
-
-    @torch.no_grad()
-    def _dequeue_and_enqueue(self, keys):
-        batch_size = keys.shape[0]
-
-        ptr = int(self.queue_ptr)
-        assert self.K % batch_size == 0  # for simplicity
-
-        # replace the keys at ptr (dequeue and enqueue)
-        self.queue[:, ptr:ptr + batch_size] = keys.T
-    
-        ptr = (ptr + batch_size) % self.K  # move pointer
-
-        self.queue_ptr[0] = ptr
-
     #Train
-    def forward(self,x1, x2,return_embedding = False,return_projection = True):
-        
-        f,h=self.encoder,self.predictor
+    def forward(self,x1, x2):
+        z1= self.encoder(x1,return_projection = True)
+        z2 = self.encoder(x2,return_projection = True)
+    
+        p1 = self.predictor(z1)
+        p2 = self.predictor(z2)
        
-        z1= f(x1,return_projection = True)
-
-        z2 = f(x2,return_projection = True)
-     
-        p1 = h(z1)
-        p2 = h(z2)
-       
-        with torch.no_grad():
-            target_encoder = self.get_target_encoder() if self.use_momentum else self.encoder
-            x11= target_encoder(x1,return_projection = True)
-        
-            x22= target_encoder(x2,return_projection = True)
+        target_encoder = self.get_target_encoder() if self.use_momentum else self.encoder
+            
+        t1= target_encoder(x1,return_projection = True)
+        t2= target_encoder(x2,return_projection = True)
           
-            x11.detach_()
-            x22.detach_()
+        t1.detach_()
+        t2.detach_()
 
-        loss1=loss_fn(p1,x22.detach())
-        loss2=loss_fn(p2,x11.detach())
+        loss1=loss_fn(p1,t2.detach())
+        loss2=loss_fn(p2,t1.detach())
 
         loss=loss1+loss2
         return loss.mean()

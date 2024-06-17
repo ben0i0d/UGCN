@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-
+from torch.cuda.amp import autocast
 import numpy as np
 
 from net.graph import Graph
@@ -291,7 +291,7 @@ class Model(nn.Module):
 
         # build networks
         spatial_kernel_size = 3
-        temporal_kernel_size = 5
+        temporal_kernel_size = 5 
         self.data_bn = nn.BatchNorm1d(in_channels * 25)
         self.l1 = TCN_GCN_unit(in_channels, hidden_channels, A, residual=False, adaptive=True)
         self.l2 = TCN_GCN_unit(hidden_channels, hidden_channels, A,stride=2, adaptive=True)
@@ -304,35 +304,34 @@ class Model(nn.Module):
         self.pro = projection_MLP(hidden_dim)
 
     def forward(self, x, drop=False, return_projection = False):
-
-        # data normalization
         N, C, T, V, M = x.size()
-        x = x.permute(0, 4, 3, 1, 2).contiguous()
-        x = x.view(N * M, V * C, T)
-        x = self.data_bn(x)
-        x = x.view(N, M, V, C, T)
-        x = x.permute(0, 1, 3, 4, 2).contiguous()
-        x = x.view(N * M, C, T, V)
-        x = self.l1(x)
-        x = self.l2(x)
-        x = self.l3(x)
-        x = self.l4(x)
-        x = self.l5(x)
-        x = self.l6(x)
+        # data normalization
+        with autocast():
+            x = x.permute(0, 4, 3, 1, 2).contiguous()
+            x = x.view(N * M, V * C, T)
+            x = self.data_bn(x)
+            x = x.view(N, M, V, C, T)
+            x = x.permute(0, 1, 3, 4, 2).contiguous()
+            x = x.view(N * M, C, T, V)
+            x = self.l1(x)
+            x = self.l2(x)
+            x = self.l3(x)
+            x = self.l4(x)
+            x = self.l5(x)
+            x = self.l6(x)
 
-        # forward
-        
-        if return_projection:
-            # global pooling
-            x = F.avg_pool2d(x, x.size()[2:])
-            x = x.view(N, M, -1).mean(dim=1)
-            # prediction
-            x = self.pro(x)
-            return x
-        else:
-            # global pooling
-            x = F.avg_pool2d(x, x.size()[2:])
-            x = x.view(N, M, -1).mean(dim=1)
-            # prediction
-            x = self.fc(x)
-            return x
+            # forward
+            if return_projection:
+                # global pooling
+                x = F.avg_pool2d(x, x.size()[2:])
+                x = x.view(N, M, -1).mean(dim=1)
+                # prediction
+                x = self.pro(x)
+                return x
+            else:
+                # global pooling
+                x = F.avg_pool2d(x, x.size()[2:])
+                x = x.view(N, M, -1).mean(dim=1)
+                # prediction
+                x = self.fc(x)
+                return x

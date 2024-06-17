@@ -34,11 +34,12 @@ model_args:
   edge_importance_weighting: True
 
 # training
-batch_size: 128
+batch_size: 512
 epochs: 100
 workers: 8
 
 ## optim
+learning_rate: 1
 lr_backbone: 0
 lr_classifier: 0.3
 weight_decay: 1e-6

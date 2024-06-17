@@ -34,10 +34,11 @@ ot: 0.1
 drop_percent: 0.2
 
 # training
-batch_size: 272
+batch_size: 500
 epochs: 800
 workers: 8
 print_freq: 200
+l: 0.1
 
 ## optim
 learning_rate: 2

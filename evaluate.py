@@ -6,6 +6,8 @@ from pathlib import Path
 
 import torch
 from torch import nn, optim
+from torch.cuda.amp import autocast, GradScaler
+
 from torchlight.io import DictAction
 from torchlight.io import import_class
 
@@ -21,6 +23,7 @@ parser.add_argument('--weights', default='freeze', type=str,choices=('finetune',
 parser.add_argument('--workers',type=int, metavar='N',help='number of data loader workers')
 parser.add_argument('--epochs',type=int, metavar='N',help='number of total epochs to run')
 parser.add_argument('--batch_size',type=int, metavar='N',help='mini-batch size')
+parser.add_argument('--learning_rate', type=float, metavar='LR',help='base learning rate')
 parser.add_argument('--lr_backbone', type=float, metavar='LR',help='backbone base learning rate')
 parser.add_argument('--lr_classifier', type=float, metavar='LR',help='classifier base learning rate')
 parser.add_argument('--weight_decay', type=float, metavar='W',help='weight decay')
@@ -102,8 +105,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    train_writer = SummaryWriter('./runs/evaluate/train')
-    val_writer = SummaryWriter('./runs/evaluate/val')
+    train_writer = SummaryWriter(args.checkpoint_dir)
+    val_writer = SummaryWriter(args.checkpoint_dir)
 
     args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
@@ -130,8 +133,9 @@ if __name__ == '__main__':
     param_groups = [dict(params=classifier_parameters, lr=args.lr_classifier)]
     if args.weights == 'finetune':
         param_groups.append(dict(params=model_parameters, lr=args.lr_backbone))
-    optimizer = optim.SGD(param_groups, 0, momentum=0.9, weight_decay=args.weight_decay)
+    optimizer = optim.SGD(param_groups, args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs)
+    scaler = GradScaler()
 
     # automatically resume from checkpoint if it exists
     if (args.checkpoint_dir / 'checkpoint.pth').is_file():
@@ -186,15 +190,19 @@ if __name__ == '__main__':
             label = label.long().to(args.dev, non_blocking=True)
             n_batch = len(trainloader)
 
-            output = model(data)
-            loss = criterion(output, label)
+            optimizer.zero_grad()
+
+            with autocast():
+                output = model(data)
+                loss = criterion(output, label)
+
             acc1, acc5 = accuracy(output, label, topk=(1, 5))
             top1_train.update(acc1[0].item(), data.size(0))
             top5_train.update(acc5[0].item(), data.size(0))
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
             step = epoch * n_batch + batch_idx
             train_writer.add_scalar('loss_train', loss.data.item(), step)
 

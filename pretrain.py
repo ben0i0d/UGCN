@@ -1,4 +1,3 @@
-import sys
 import yaml
 import math
 import random
@@ -12,6 +11,8 @@ from torchlight.io import import_class
 from tensorboardX import SummaryWriter
 
 import torch
+from torch.utils.data import Subset
+from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data.distributed import DistributedSampler
 
 from net.byol import BYOL
@@ -32,6 +33,7 @@ parser.add_argument('-c', '--config', default='config/train_cs.yaml', help='path
 # feeder
 parser.add_argument('--train_feeder', help='train data loader will be used')
 parser.add_argument('--train_feeder_args', action=DictAction, help='the arguments of data loader for training')
+parser.add_argument('--l', type=float, help='the length of dataset')
 
 # model
 parser.add_argument('--model', help='the model will be used')
@@ -97,29 +99,32 @@ if __name__ == '__main__':
     torch.distributed.init_process_group(backend='nccl')
     
     if args.local_rank == 0:
-        train_writer = SummaryWriter('./runs/pretrain')
+        train_writer = SummaryWriter(args.checkpoint_dir)
         args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     model = BYOL(args).to(device)
 
-    optimizer = LARS(model.parameters(), lr=0, weight_decay=args.weight_decay,weight_decay_filter=exclude_bias_and_norm,lars_adaptation_filter=exclude_bias_and_norm)
-    
+    optimizer = LARS(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay,weight_decay_filter=exclude_bias_and_norm,lars_adaptation_filter=exclude_bias_and_norm)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2,eta_min=0.0001)
+    scaler = GradScaler()
+
     # automatically resume from checkpoint if it exists
     if (args.checkpoint_dir / 'checkpoint.pth').is_file():
         ckpt = torch.load(args.checkpoint_dir / 'checkpoint.pth', map_location='cpu')
         model.load_state_dict(ckpt['model'], strict=False)
         optimizer.load_state_dict(ckpt['optimizer'])
+        scheduler.load_state_dict(ckpt['scheduler'])
         start_epoch = ckpt['epoch']
     else:
         start_epoch = 0
     
     train_feeder = import_class(args.train_feeder)
     train_dataset = train_feeder(**args.train_feeder_args)
+    train_dataset = Subset(train_dataset, range(int(len(train_dataset)*args.l)))
 
     train_sampler = DistributedSampler(train_dataset)
     train_loader = torch.utils.data.DataLoader(train_dataset, sampler=train_sampler, batch_size=args.batch_size)
     
-
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True)
 
     loss_min=200
@@ -136,22 +141,25 @@ if __name__ == '__main__':
             label = label.long().to(device, non_blocking=True)
 
             step = epoch * loader_len + batch_idx
-            lr = adjust_learning_rate(args, optimizer, loader_len, step)
 
-            loss = model.forward(data1, data2, return_embedding=False, return_projection=True)
-            loss0=loss+loss0
             optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            
+            with autocast():
+                loss = model.forward(data1, data2)
+            loss0=loss+loss0
+            
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            
             lr = optimizer.param_groups[0]['lr']
             if args.local_rank == 0:
                 train_writer.add_scalar('loss_step', loss.data.item(), step)
                 train_writer.add_scalar('lr', lr, step)
-            if args.local_rank == 0 and args.print_freq > 0 and batch_idx % args.print_freq == 0:
-                print('Train Epoch: {} [{}/{}] Loss: {:.6f}'.format(epoch+1, batch_idx, loader_len, loss.item()))
+        scheduler.step()
         print("Device{}: LR:{} Loss:{}".format(args.local_rank,lr,loss.item()))
         
-        state = dict(epoch=epoch + 1, model=model.module.state_dict(),optimizer=optimizer.state_dict())
+        state = dict(epoch=epoch + 1, model=model.module.state_dict(),optimizer=optimizer.state_dict(),scheduler=scheduler.state_dict())
         torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
         if (epoch+1) % 10 == 0:
             torch.save(model.module.encoder.state_dict(),args.checkpoint_dir / 'ugcn_{}.pth'.format(epoch + 1))
