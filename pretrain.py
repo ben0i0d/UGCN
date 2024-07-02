@@ -1,3 +1,5 @@
+import os
+local_rank = int(os.environ["LOCAL_RANK"])
 import yaml
 import math
 import random
@@ -12,7 +14,6 @@ from tensorboardX import SummaryWriter
 
 import torch
 from torch.utils.data import Subset
-from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data.distributed import DistributedSampler
 
 from net.byol import BYOL
@@ -20,7 +21,6 @@ from optim.lars import LARS
 from optim.lars import exclude_bias_and_norm
 
 parser = argparse.ArgumentParser(description='BYOL Training')
-parser.add_argument("--local-rank", type=int, default=-1)
 parser.add_argument('--workers', type=int, metavar='N',help='number of data loader workers')
 parser.add_argument('--epochs', type=int, metavar='N',help='number of total epochs to run')
 parser.add_argument('--batch-size', type=int, metavar='N',help='mini-batch size')
@@ -93,12 +93,12 @@ if __name__ == '__main__':
     
     set_seed()
     # 每个进程根据自己的local_rank设置应该使用的GPU
-    torch.cuda.set_device(args.local_rank)
-    device = torch.device('cuda', args.local_rank)
+    torch.cuda.set_device(local_rank)
+    device = torch.device('cuda', local_rank)
     # 初始化分布式环境，主要用来帮助进程间通信
     torch.distributed.init_process_group(backend='nccl')
     
-    if args.local_rank == 0:
+    if local_rank == 0:
         train_writer = SummaryWriter(args.checkpoint_dir)
         args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
@@ -106,7 +106,7 @@ if __name__ == '__main__':
 
     optimizer = LARS(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay,weight_decay_filter=exclude_bias_and_norm,lars_adaptation_filter=exclude_bias_and_norm)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2,eta_min=0.0001)
-    scaler = GradScaler()
+    scaler = torch.amp.GradScaler('cuda')
 
     # automatically resume from checkpoint if it exists
     if (args.checkpoint_dir / 'checkpoint.pth').is_file():
@@ -114,10 +114,11 @@ if __name__ == '__main__':
         model.load_state_dict(ckpt['model'], strict=False)
         optimizer.load_state_dict(ckpt['optimizer'])
         scheduler.load_state_dict(ckpt['scheduler'])
+        scaler.load_state_dict(ckpt['scaler'])
         start_epoch = ckpt['epoch']
     else:
         start_epoch = 0
-    
+
     train_feeder = import_class(args.train_feeder)
     train_dataset = train_feeder(**args.train_feeder_args)
     train_dataset = Subset(train_dataset, range(int(len(train_dataset)*args.l)))
@@ -125,14 +126,14 @@ if __name__ == '__main__':
     train_sampler = DistributedSampler(train_dataset)
     train_loader = torch.utils.data.DataLoader(train_dataset, sampler=train_sampler, batch_size=args.batch_size)
     
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True)
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
 
     loss_min=200
 
     for epoch in range(start_epoch, args.epochs):
         loss0=0
         print("Epoch:[{}/{}]".format(epoch+1,args.epochs))
-        for batch_idx, ([data1, data2], label) in enumerate(tqdm(train_loader)):
+        for batch_idx, ([data1, data2], label) in enumerate(train_loader):
             loader_len = len(train_loader)
 
             data1 = data1.float().to(device, non_blocking=True)
@@ -144,7 +145,7 @@ if __name__ == '__main__':
 
             optimizer.zero_grad()
             
-            with autocast():
+            with torch.amp.autocast('cuda'):
                 loss = model.forward(data1, data2)
             loss0=loss+loss0
             
@@ -153,13 +154,13 @@ if __name__ == '__main__':
             scaler.update()
             
             lr = optimizer.param_groups[0]['lr']
-            if args.local_rank == 0:
+            if local_rank == 0:
                 train_writer.add_scalar('loss_step', loss.data.item(), step)
                 train_writer.add_scalar('lr', lr, step)
         scheduler.step()
-        print("Device{}: LR:{} Loss:{}".format(args.local_rank,lr,loss.item()))
+        print("Device{}: LR:{} Loss:{}".format(local_rank,lr,loss.item()))
         
-        state = dict(epoch=epoch + 1, model=model.module.state_dict(),optimizer=optimizer.state_dict(),scheduler=scheduler.state_dict())
+        state = dict(epoch=epoch + 1, model=model.module.state_dict(),optimizer=optimizer.state_dict(),scheduler=scheduler.state_dict(),scaler=scaler.state_dict())
         torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
         if (epoch+1) % 10 == 0:
             torch.save(model.module.encoder.state_dict(),args.checkpoint_dir / 'ugcn_{}.pth'.format(epoch + 1))

@@ -6,7 +6,6 @@ from pathlib import Path
 
 import torch
 from torch import nn, optim
-from torch.cuda.amp import autocast, GradScaler
 
 from torchlight.io import DictAction
 from torchlight.io import import_class
@@ -135,7 +134,7 @@ if __name__ == '__main__':
         param_groups.append(dict(params=model_parameters, lr=args.lr_backbone))
     optimizer = optim.SGD(param_groups, args.learning_rate, momentum=0.9, weight_decay=args.weight_decay)
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs)
-    scaler = GradScaler()
+    scaler = torch.amp.GradScaler('cuda')
 
     # automatically resume from checkpoint if it exists
     if (args.checkpoint_dir / 'checkpoint.pth').is_file():
@@ -192,7 +191,7 @@ if __name__ == '__main__':
 
             optimizer.zero_grad()
 
-            with autocast():
+            with torch.amp.autocast('cuda'):
                 output = model(data)
                 loss = criterion(output, label)
 

@@ -74,22 +74,19 @@ class BYOL(nn.Module):
 
     #Train
     def forward(self,x1, x2):
+        target_encoder = self.get_target_encoder() if self.use_momentum else self.encoder
+
         z1= self.encoder(x1,return_projection = True)
         z2 = self.encoder(x2,return_projection = True)
     
         p1 = self.predictor(z1)
         p2 = self.predictor(z2)
        
-        target_encoder = self.get_target_encoder() if self.use_momentum else self.encoder
-            
         t1= target_encoder(x1,return_projection = True)
         t2= target_encoder(x2,return_projection = True)
           
-        t1.detach_()
-        t2.detach_()
-
-        loss1=loss_fn(p1,t2.detach())
-        loss2=loss_fn(p2,t1.detach())
+        loss1=loss_fn(p1,t2.detach_())
+        loss2=loss_fn(p2,t1.detach_())
 
         loss=loss1+loss2
         return loss.mean()

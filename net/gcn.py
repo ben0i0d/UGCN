@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from torch.cuda.amp import autocast
 import numpy as np
 
 from net.graph import Graph
@@ -306,7 +305,7 @@ class Model(nn.Module):
     def forward(self, x, drop=False, return_projection = False):
         N, C, T, V, M = x.size()
         # data normalization
-        with autocast():
+        with torch.amp.autocast('cuda'):
             x = x.permute(0, 4, 3, 1, 2).contiguous()
             x = x.view(N * M, V * C, T)
             x = self.data_bn(x)
