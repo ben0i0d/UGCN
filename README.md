@@ -1,4 +1,4 @@
-# UO-STGCN
+# UGCN
 
 *这是不太稳定的研究性质代码*
 
@@ -7,12 +7,6 @@
 1. Get skeleton of each performer:`python get_raw_skes_data.py`
 2. Remove the bad skeleton:`python get_raw_denoised_data.py`
 3. Transform the skeleton to the center of the first frame：`python seq_transformation.py`
-
-*使用300帧的原因是，存在的最大帧数为299*
-
-*平均帧数为84.36*
-
-![alt text](.resources/image.png)
 
 #### Directory Structure
 ```
