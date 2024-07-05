@@ -2,7 +2,7 @@ import copy
 import torch
 from torch import nn
 import torch.nn.functional as F
-from torchlight.io import import_class
+from utils.io import import_class
 
 class prediction_MLP(nn.Module):
     def __init__(self, in_dim=2048, hidden_dim=512, out_dim=2048): # bottleneck structure

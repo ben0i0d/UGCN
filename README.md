@@ -28,7 +28,7 @@ OMP_NUM_THREADS=4 python -m torch.distributed.launch --nproc_per_node=2 --nnodes
 
 注意：
 1. 默认启用了`checkpoint`机制,注意`checkpoint`只支持单阶段，例如预训练得到的权重只服务于预训练阶段，如果要将权重用到测试阶段，则必须使用`gcn.pth`这样的权重
-2. 默认将生成文件统一放入`runs`，包括测试生成的`.npy`文件等，当前我们仅考虑NTU60数据集，因此没有细化目录结构
+2. 默认将生成文件统一放入`runs/pretrain`
 
 ## 模型测试
 
@@ -36,10 +36,10 @@ OMP_NUM_THREADS=4 python -m torch.distributed.launch --nproc_per_node=2 --nnodes
 python evaluate.py --epochs 100 --dev cuda:0 --pretrained runs/pretrain/cs/gcn.pth --config config/evaluate_cs.yaml --checkpoint-dir runs/evaluate/cs/
 ```
 
-## dep
+## 依赖
 
 ```
-torch pyyaml tensorboardX einops
+torch pyyaml tensorboardX einops h5py scikit-learn tqdm
 ```
 
 **代码仍然在梳理中，对没有用到的代码也仍在简化**

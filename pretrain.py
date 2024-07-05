@@ -1,15 +1,14 @@
 import os
 local_rank = int(os.environ["LOCAL_RANK"])
 import yaml
-import math
 import random
 import argparse
 import numpy as np
 from tqdm import tqdm
 from pathlib import Path
 
-from torchlight.io import DictAction
-from torchlight.io import import_class
+from utils.io import DictAction
+from utils.io import import_class
 from tensorboardX import SummaryWriter
 
 import torch
@@ -133,9 +132,6 @@ if __name__ == '__main__':
                 loss = model.forward(data1, data2)
             loss_epoch+=loss.item()
             
-            #loss.backward()
-            #optimizer.step()
-            
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
@@ -146,7 +142,7 @@ if __name__ == '__main__':
                 train_writer.add_scalar('lr', lr, step)
         print("Device{}: LR:{} Loss:{}".format(local_rank,lr,loss.item()))
         
-        state = dict(epoch=epoch + 1, model=model.module.state_dict(),optimizer=optimizer.state_dict(),scheduler=scheduler.state_dict(),scaler=scaler.state_dict())
+        state = dict(epoch=epoch + 1, model=model.module.state_dict(),optimizer=optimizer.state_dict(),scaler=scaler.state_dict())
         torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
         if (epoch+1) % 10 == 0:
             torch.save(model.module.encoder.state_dict(),args.checkpoint_dir / 'ugcn_{}.pth'.format(epoch + 1))
