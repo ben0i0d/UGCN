@@ -19,6 +19,7 @@ from torch.utils.data.distributed import DistributedSampler
 from net.byol import BYOL
 from optim.lars import LARS
 from optim.lars import exclude_bias_and_norm
+from optim.scheduler import adjust_learning_rate
 
 parser = argparse.ArgumentParser(description='BYOL Training')
 parser.add_argument('--workers', type=int, metavar='N',help='number of data loader workers')
@@ -56,22 +57,6 @@ def set_seed(seed = 42):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-def adjust_learning_rate(args, optimizer, loader_len, step):
-    max_steps = args.epochs * loader_len
-    warmup_steps = 5 * loader_len
-    base_lr = args.learning_rate * args.batch_size / 256
-    if step < warmup_steps:
-        lr = base_lr * step / warmup_steps
-    else:
-        step -= warmup_steps
-        max_steps -= warmup_steps
-        q = 0.5 * (1 + math.cos(math.pi * step / max_steps))
-        end_lr = base_lr * 0.001
-        lr = base_lr * q + end_lr * (1 - q)
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
-    return lr
-
 if __name__ == '__main__':
     p = parser.parse_args()
 
@@ -105,7 +90,6 @@ if __name__ == '__main__':
     model = BYOL(args).to(device)
 
     optimizer = LARS(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay,weight_decay_filter=exclude_bias_and_norm,lars_adaptation_filter=exclude_bias_and_norm)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2,eta_min=0.0001)
     scaler = torch.amp.GradScaler('cuda')
 
     # automatically resume from checkpoint if it exists
@@ -113,7 +97,6 @@ if __name__ == '__main__':
         ckpt = torch.load(args.checkpoint_dir / 'checkpoint.pth', map_location='cpu')
         model.load_state_dict(ckpt['model'], strict=False)
         optimizer.load_state_dict(ckpt['optimizer'])
-        scheduler.load_state_dict(ckpt['scheduler'])
         scaler.load_state_dict(ckpt['scaler'])
         start_epoch = ckpt['epoch']
     else:
@@ -128,26 +111,30 @@ if __name__ == '__main__':
     
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
 
-    loss_min=200
+    loss_min=float('inf')
 
     for epoch in range(start_epoch, args.epochs):
-        loss0=0
+        loss_epoch=0
         print("Epoch:[{}/{}]".format(epoch+1,args.epochs))
-        for batch_idx, ([data1, data2], label) in enumerate(train_loader):
-            loader_len = len(train_loader)
+        for batch_idx, ([data1, data2], label) in enumerate(tqdm(train_loader)):
+            n_batch = len(train_loader)
 
             data1 = data1.float().to(device, non_blocking=True)
             data2 = data2.float().to(device, non_blocking=True)
             
             label = label.long().to(device, non_blocking=True)
 
-            step = epoch * loader_len + batch_idx
+            step = epoch * n_batch + batch_idx
+            lr = adjust_learning_rate(args, optimizer, train_loader, step)
 
             optimizer.zero_grad()
             
             with torch.amp.autocast('cuda'):
                 loss = model.forward(data1, data2)
-            loss0=loss+loss0
+            loss_epoch+=loss.item()
+            
+            #loss.backward()
+            #optimizer.step()
             
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -157,14 +144,13 @@ if __name__ == '__main__':
             if local_rank == 0:
                 train_writer.add_scalar('loss_step', loss.data.item(), step)
                 train_writer.add_scalar('lr', lr, step)
-        scheduler.step()
         print("Device{}: LR:{} Loss:{}".format(local_rank,lr,loss.item()))
         
         state = dict(epoch=epoch + 1, model=model.module.state_dict(),optimizer=optimizer.state_dict(),scheduler=scheduler.state_dict(),scaler=scaler.state_dict())
         torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
         if (epoch+1) % 10 == 0:
             torch.save(model.module.encoder.state_dict(),args.checkpoint_dir / 'ugcn_{}.pth'.format(epoch + 1))
-        if loss0<loss_min and epoch>100:
-            loss_min=loss0
+        if loss_epoch<loss_min and epoch>100:
+            loss_min=loss_epoch
             torch.save(model.module.encoder.state_dict(),args.checkpoint_dir / 'best.pth')
     torch.save(model.module.encoder.state_dict(),args.checkpoint_dir / 'ugcn.pth')

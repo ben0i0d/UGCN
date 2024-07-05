@@ -172,7 +172,6 @@ class unit_tcn(nn.Module):
         x = self.bn(self.conv(x))
         return x
 
-
 class unit_gcn(nn.Module):
     def __init__(self, in_channels, out_channels, A, coff_embedding=4, adaptive=True, residual=True):
         super(unit_gcn, self).__init__()
@@ -224,8 +223,6 @@ class unit_gcn(nn.Module):
         y = self.bn(y)
         y += self.down(x)
         y = self.relu(y)
-
-
         return y
 
 class TCN_GCN_unit(nn.Module):
@@ -289,8 +286,6 @@ class Model(nn.Module):
         A = self.graph.A 
 
         # build networks
-        spatial_kernel_size = 3
-        temporal_kernel_size = 5 
         self.data_bn = nn.BatchNorm1d(in_channels * 25)
         self.l1 = TCN_GCN_unit(in_channels, hidden_channels, A, residual=False, adaptive=True)
         self.l2 = TCN_GCN_unit(hidden_channels, hidden_channels, A,stride=2, adaptive=True)
