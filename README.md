@@ -1,6 +1,6 @@
 # UGCN
 
-*这是不太稳定的研究性质代码*
+*这基本是一个稳定版本，足够简练且平稳，目前在高性能优化*
 
 ## 数据处理
 
@@ -41,5 +41,3 @@ python evaluate.py --epochs 100 --dev cuda:0 --pretrained runs/pretrain/cs/gcn.p
 ```
 torch pyyaml tensorboardX einops h5py scikit-learn tqdm
 ```
-
-**代码仍然在梳理中，对没有用到的代码也仍在简化**
