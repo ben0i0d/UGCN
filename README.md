@@ -23,7 +23,7 @@
 ## 模型训练
 
 ```
-OMP_NUM_THREADS=4 python -m torch.distributed.launch --nproc_per_node=2 --nnodes=1 pretrain.py --config config/train_cs.yaml --checkpoint-dir runs/pretrain/cs/
+!OMP_NUM_THREADS=4 torchrun --standalone --nproc_per_node=1 --nnodes=1 pretrain.py --config config/train_cs.yaml --checkpoint-dir runs/pretrain/cs
 ```
 
 注意：
