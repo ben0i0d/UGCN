@@ -1,10 +1,4 @@
-data_gen/__pycache__
-torchlight/__pycache__
-feeder/__pycache__
-graph/__pycache__
-net/__pycache__
-net/utils/__pycache__
-optim/__pycache__
+__pycache__
 
 data_gen/ntu/raw_data
 data_gen/ntu/denoised_data
