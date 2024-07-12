@@ -18,7 +18,6 @@ from torch.utils.data.distributed import DistributedSampler
 from net.byol import BYOL
 from optim.lars import LARS
 from optim.lars import exclude_bias_and_norm
-from optim.scheduler import adjust_learning_rate
 
 parser = argparse.ArgumentParser(description='BYOL Training')
 parser.add_argument('--workers', type=int, metavar='N',help='number of data loader workers')
@@ -89,14 +88,14 @@ if __name__ == '__main__':
     model = BYOL(args).to(device)
 
     optimizer = LARS(model.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay,weight_decay_filter=exclude_bias_and_norm,lars_adaptation_filter=exclude_bias_and_norm)
-    scaler = torch.amp.GradScaler('cuda')
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=5, T_mult=2,eta_min=0.0001)
 
     # automatically resume from checkpoint if it exists
     if (args.checkpoint_dir / 'checkpoint.pth').is_file():
         ckpt = torch.load(args.checkpoint_dir / 'checkpoint.pth', map_location='cpu')
         model.load_state_dict(ckpt['model'], strict=False)
         optimizer.load_state_dict(ckpt['optimizer'])
-        scaler.load_state_dict(ckpt['scaler'])
+        scheduler.load_state_dict(ckpt['scheduler'])
         start_epoch = ckpt['epoch']
     else:
         start_epoch = 0
@@ -124,25 +123,23 @@ if __name__ == '__main__':
             label = label.long().to(device, non_blocking=True)
 
             step = epoch * n_batch + batch_idx
-            lr = adjust_learning_rate(args, optimizer, train_loader, step)
 
             optimizer.zero_grad()
             
-            with torch.amp.autocast('cuda'):
-                loss = model.forward(data1, data2)
+            loss = model.forward(data1, data2)
             loss_epoch+=loss.item()
             
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+            loss.backward()
+            optimizer.step()
             
             lr = optimizer.param_groups[0]['lr']
             if local_rank == 0:
                 train_writer.add_scalar('loss_step', loss.data.item(), step)
                 train_writer.add_scalar('lr', lr, step)
+        scheduler.step()
         print("Device{}: LR:{} Loss:{}".format(local_rank,lr,loss.item()))
         
-        state = dict(epoch=epoch + 1, model=model.module.state_dict(),optimizer=optimizer.state_dict(),scaler=scaler.state_dict())
+        state = dict(epoch=epoch + 1, model=model.module.state_dict(),optimizer=optimizer.state_dict(),scheduler=scheduler.state_dict())
         torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
         if (epoch+1) % 10 == 0:
             torch.save(model.module.encoder.state_dict(),args.checkpoint_dir / 'ugcn_{}.pth'.format(epoch + 1))

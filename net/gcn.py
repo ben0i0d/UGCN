@@ -300,32 +300,31 @@ class Model(nn.Module):
     def forward(self, x, drop=False, return_projection = False):
         N, C, T, V, M = x.size()
         # data normalization
-        with torch.amp.autocast('cuda'):
-            x = x.permute(0, 4, 3, 1, 2).contiguous()
-            x = x.view(N * M, V * C, T)
-            x = self.data_bn(x)
-            x = x.view(N, M, V, C, T)
-            x = x.permute(0, 1, 3, 4, 2).contiguous()
-            x = x.view(N * M, C, T, V)
-            x = self.l1(x)
-            x = self.l2(x)
-            x = self.l3(x)
-            x = self.l4(x)
-            x = self.l5(x)
-            x = self.l6(x)
+        x = x.permute(0, 4, 3, 1, 2).contiguous()
+        x = x.view(N * M, V * C, T)
+        x = self.data_bn(x)
+        x = x.view(N, M, V, C, T)
+        x = x.permute(0, 1, 3, 4, 2).contiguous()
+        x = x.view(N * M, C, T, V)
+        x = self.l1(x)
+        x = self.l2(x)
+        x = self.l3(x)
+        x = self.l4(x)
+        x = self.l5(x)
+        x = self.l6(x)
 
-            # forward
-            if return_projection:
-                # global pooling
-                x = F.avg_pool2d(x, x.size()[2:])
-                x = x.view(N, M, -1).mean(dim=1)
-                # prediction
-                x = self.pro(x)
-                return x
-            else:
-                # global pooling
-                x = F.avg_pool2d(x, x.size()[2:])
-                x = x.view(N, M, -1).mean(dim=1)
-                # prediction
-                x = self.fc(x)
-                return x
+        # forward
+        if return_projection:
+            # global pooling
+            x = F.avg_pool2d(x, x.size()[2:])
+            x = x.view(N, M, -1).mean(dim=1)
+            # prediction
+            x = self.pro(x)
+            return x
+        else:
+            # global pooling
+            x = F.avg_pool2d(x, x.size()[2:])
+            x = x.view(N, M, -1).mean(dim=1)
+            # prediction
+            x = self.fc(x)
+            return x
