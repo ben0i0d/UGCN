@@ -191,17 +191,15 @@ if __name__ == '__main__':
 
             optimizer.zero_grad()
 
-            with torch.amp.autocast('cuda'):
-                output = model(data)
-                loss = criterion(output, label)
+            output = model(data)
+            loss = criterion(output, label)
 
             acc1, acc5 = accuracy(output, label, topk=(1, 5))
             top1_train.update(acc1[0].item(), data.size(0))
             top5_train.update(acc5[0].item(), data.size(0))
 
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+            loss.backward()
+            optimizer.step()
             step = epoch * n_batch + batch_idx
             train_writer.add_scalar('loss_train', loss.data.item(), step)
 
